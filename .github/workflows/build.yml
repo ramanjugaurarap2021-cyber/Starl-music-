@@ -1,0 +1,80 @@
+
+name: Build Starl APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Download Gradle 8.9
+        run: |
+          set -e
+          FILE=gradle-8.9-bin.zip
+          SHA=gradle-8.9-bin.zip.sha256
+          mkdir -p "$RUNNER_TEMP/gradle"
+          cd "$RUNNER_TEMP/gradle"
+
+          for BASE in \
+            https://mirrors.huaweicloud.com/gradle \
+            https://repo.huaweicloud.com/repository/toolkit/gradle
+          do
+            if curl -fL --retry 3 --retry-all-errors \
+              "$BASE/$FILE" -o "$FILE" &&
+               curl -fL --retry 3 --retry-all-errors \
+              "$BASE/$SHA" -o "$SHA"; then
+
+              EXPECTED=$(awk '{print $1}' "$SHA")
+              ACTUAL=$(sha256sum "$FILE" | awk '{print $1}')
+
+              if [ "$EXPECTED" = "$ACTUAL" ]; then
+                break
+              fi
+            fi
+            rm -f "$FILE" "$SHA"
+          done
+
+          test -s "$FILE"
+          test -s "$SHA"
+          echo "$EXPECTED  $FILE" | sha256sum -c -
+
+          unzip -q "$FILE" -d "$RUNNER_TEMP"
+
+      - name: Build Starl APK
+        run: |
+          "$RUNNER_TEMP/gradle-8.9/bin/gradle" \
+            assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Starl-Music-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
