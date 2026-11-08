@@ -49,8 +49,35 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android
-        uses: android-actions/setup-android@v3
+      - 
+- name: Setup Android SDK
+  shell: bash
+  run: |
+    set -e
+
+    export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+    export ANDROID_SDK_ROOT="$ANDROID_HOME"
+
+    SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+      -type f -name sdkmanager 2>/dev/null | head -1)
+
+    if [ -z "$SDKMANAGER" ]; then
+      echo "sdkmanager not found"
+      exit 1
+    fi
+
+    echo "Using: $SDKMANAGER"
+    "$SDKMANAGER" --version
+
+    set +o pipefail
+    yes | "$SDKMANAGER" --licenses || true
+    set -o pipefail
+
+    "$SDKMANAGER" \
+      "platform-tools" \
+      "platforms;android-35" \
+      "build-tools;35.0.0"
+      
 
       - name: Install SDK
         run: |
